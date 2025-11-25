@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { poppins } from "@/public/fonts";
 import "./globals.css";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
 	title: "Flourence Lapore",
@@ -16,6 +16,7 @@ export default function RootLayout({
 	return (
 		<html lang="en">
 			<body className={`${poppins.className} antialiased`}>{children}</body>
+			<Toaster />
 		</html>
 	);
 }
