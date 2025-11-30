@@ -106,20 +106,6 @@ const Login = () => {
 						<MetaMaskLogo />
 						Connect metamask wallet!
 					</Button>
-
-					<div className="my-7 w-full flex items-center justify-center overflow-hidden">
-						<Separator />
-						<span className="text-sm px-2">OR</span>
-						<Separator />
-					</div>
-
-					<Button
-						className="w-full gap-3"
-						onClick={connectWallet}
-					>
-						<WalletConnectLogo />
-						Connect wallet connect!
-					</Button>
 				</div>
 				<div className="bg-muted hidden lg:block border-l" />
 			</div>
