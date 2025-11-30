@@ -25,20 +25,41 @@ import {
 	TableBody,
 	TableCell,
 } from "@/components/ui/table";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@/components/ui/command";
+import { CheckIcon, ChevronsUpDownIcon } from "lucide-react";
 import { ethers } from "ethers";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import walletService from "@/service/wallet.service";
+import { toast } from "sonner";
+import React from "react";
+import { cn } from "@/lib/utils";
+import { Transaction } from "@/interface/transaction";
 
 export default function Component() {
 	const router = useRouter();
-	interface Transaction {
-		hash: string;
-		from: string;
-		to: string | null;
-		value: string;
-		timestamp: number;
-		blockNumber: number | null;
-	}
+	const chains = [
+		{
+			value: "1",
+			label: "Ethereum Mainnet",
+		},
+		{
+			value: "11155111",
+			label: "Sepolia Testnet",
+		},
+	];
 
 	const [account, setAccount] = useState<string>("");
 	const [balance, setBalance] = useState("0");
@@ -46,12 +67,9 @@ export default function Component() {
 	const [transactions, setTransactions] = useState<Transaction[]>([]);
 	const [isLoadingTx, setIsLoadingTx] = useState(false);
 	const [avatar, setAvatar] = useState<string | undefined>(undefined);
-
-	// Then in JSX
-	<img
-		src={avatar}
-		alt="Avatar"
-	/>;
+	const [open, setOpen] = React.useState(false);
+	const [chainId, setChainId] = useState("1");
+	const [dropDownValue, setDropDownValue] = React.useState("1");
 
 	useEffect(() => {
 		initializeWallet();
@@ -78,10 +96,11 @@ export default function Component() {
 				}
 			};
 		}
-	}, []);
+	}, [chainId, account]);
 
 	const initializeWallet = async () => {
 		// Check if wallet is connected
+		setIsLoadingTx(true);
 		const storedAddress = localStorage.getItem("walletAddress");
 
 		if (!storedAddress) {
@@ -94,114 +113,54 @@ export default function Component() {
 		setIsLoading(false); // Set loading to false immediately after setting account
 
 		// Fetch balance and transactions in parallel without blocking UI
-		Promise.all([
-			fetchBalance(storedAddress),
-			fetchTransactions(storedAddress),
-		]).catch((err) => {
-			console.error("Error loading wallet data:", err);
-		});
-	};
-
-	const fetchBalance = async (address: string) => {
 		try {
-			if (!window.ethereum) return;
+			const [balanceData, transactionsData] = await Promise.all([
+				walletService.fetchBalance(storedAddress, chainId),
+				walletService.fetchTransactions(storedAddress, chainId),
+			]);
 
-			const provider = new ethers.BrowserProvider(window.ethereum);
-			const balanceWei = await provider.getBalance(address);
-			const balanceEth = ethers.formatEther(balanceWei);
-			const avatarUrl = (await provider.getAvatar?.(address)) || undefined;
-
-			setAvatar(avatarUrl);
-			setBalance(balanceEth);
-			localStorage.setItem("walletBalance", balanceEth);
-		} catch (err) {
-			console.error("Error fetching balance:", err);
-		}
-	};
-
-	const fetchTransactions = async (address: string) => {
-		setIsLoadingTx(true);
-		try {
-			if (!window.ethereum) {
-				setIsLoadingTx(false);
-				return;
+			// Update state with the fetched data
+			if (balanceData && typeof balanceData === "string") {
+				setBalance(balanceData);
+				setAvatar(avatar);
 			}
 
-			const provider = new ethers.BrowserProvider(window.ethereum);
-			const network = await provider.getNetwork();
-
-			// Determine Etherscan API endpoint based on network
-			let apiUrl = "https://api.etherscan.io/v2/api";
-
-			let apiKey = "936SZ8T8AGGDA4D8FYMMVFF1VZVQ12P1IY"; // You can use this default for testing, or get your own free key
-
-			// Map chain IDs to Etherscan endpoints
-			const chainId = Number(network.chainId);
-			switch (chainId) {
-				case 1: // Ethereum Mainnet
-					apiUrl = "https://api.etherscan.io/api";
-					break;
-				case 11155111: // Sepolia Testnet
-					apiUrl = "https://api-sepolia.etherscan.io/api";
-					break;
-				case 5: // Goerli Testnet
-					apiUrl = "https://api-goerli.etherscan.io/api";
-					break;
-				case 137: // Polygon Mainnet
-					apiUrl = "https://api.polygonscan.com/api";
-					break;
-				case 80001: // Polygon Mumbai Testnet
-					apiUrl = "https://api-testnet.polygonscan.com/api";
-					break;
-				case 56: // BSC Mainnet
-					apiUrl = "https://api.bscscan.com/api";
-					break;
-				case 97: // BSC Testnet
-					apiUrl = "https://api-testnet.bscscan.com/api";
-					break;
-				default:
-					console.warn("Unsupported network for transaction history");
-					setTransactions([]);
-					setIsLoadingTx(false);
-					return;
+			if (transactionsData && Array.isArray(transactionsData)) {
+				setTransactions(transactionsData);
 			}
-
-			// Fetch transactions from Etherscan API
-			const url = `${apiUrl}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=10&sort=desc&apikey=${apiKey}`;
-
-			const response = await fetch(url);
-			const data = await response.json();
-
-			if (data.status === "1" && data.result) {
-				const txList: Transaction[] = data.result.map((tx: any) => ({
-					hash: tx.hash,
-					from: tx.from,
-					to: tx.to || null,
-					value: ethers.formatEther(tx.value),
-					timestamp: parseInt(tx.timeStamp),
-					blockNumber: parseInt(tx.blockNumber),
-				}));
-
-				setTransactions(txList);
-			} else {
-				// No transactions found or API error
-				setTransactions([]);
-			}
-		} catch (err) {
-			console.error("Error fetching transactions:", err);
-			setTransactions([]);
+		} catch (error) {
+			toast.error(`Something went wrong: ${error}`, {
+				style: {
+					"--normal-bg":
+						"color-mix(in oklab, var(--destructive) 10%, var(--background))",
+					"--normal-text": "var(--destructive)",
+					"--normal-border": "var(--destructive)",
+				} as React.CSSProperties,
+			});
 		} finally {
 			setIsLoadingTx(false);
 		}
 	};
 
-	const handleAccountsChanged = (accounts: string[]) => {
-		if (accounts.length === 0) {
-			handleLogout();
-		} else {
-			setAccount(accounts[0]);
-			fetchBalance(accounts[0]);
-			fetchTransactions(accounts[0]);
+	const handleAccountsChanged = async (accounts: string[]) => {
+		try {
+			if (accounts.length === 0) {
+				handleLogout();
+			} else {
+				setAccount(accounts[0]);
+				await walletService.fetchBalance(accounts[0], chainId);
+
+				await walletService.fetchTransactions(accounts[0], chainId);
+			}
+		} catch (error) {
+			toast.error(`Something went wrong: ${error}`, {
+				style: {
+					"--normal-bg":
+						"color-mix(in oklab, var(--destructive) 10%, var(--background))",
+					"--normal-text": "var(--destructive)",
+					"--normal-border": "var(--destructive)",
+				} as React.CSSProperties,
+			});
 		}
 	};
 
@@ -210,9 +169,30 @@ export default function Component() {
 	};
 
 	const handleLogout = () => {
-		localStorage.removeItem("walletAddress");
-		localStorage.removeItem("walletBalance");
-		router.push("/");
+		try {
+			localStorage.removeItem("walletAddress");
+			localStorage.removeItem("walletBalance");
+			toast.success(`User logged out`, {
+				style: {
+					"--normal-bg":
+						"color-mix(in oklab, light-dark(var(--color-green-600), var(--color-green-400)) 10%, var(--background))",
+					"--normal-text":
+						"light-dark(var(--color-green-600), var(--color-green-400))",
+					"--normal-border":
+						"light-dark(var(--color-green-600), var(--color-green-400))",
+				} as React.CSSProperties,
+			});
+			router.push("/");
+		} catch (error) {
+			toast.error(`Something went wrong: ${error}`, {
+				style: {
+					"--normal-bg":
+						"color-mix(in oklab, var(--destructive) 10%, var(--background))",
+					"--normal-text": "var(--destructive)",
+					"--normal-border": "var(--destructive)",
+				} as React.CSSProperties,
+			});
+		}
 	};
 
 	const formatAddress = (address: string) => {
@@ -290,30 +270,101 @@ export default function Component() {
 								{parseFloat(balance).toFixed(4)} ETH
 							</div>
 							<div className="text-muted-foreground">Available Balance</div>
+
 							<Button
 								variant="secondary"
 								size="sm"
-								onClick={() => {
-									fetchBalance(account);
-									fetchTransactions(account);
+								onClick={async () => {
+									setIsLoadingTx(true);
+									try {
+										const [balanceData, transactionsData] = await Promise.all([
+											walletService.fetchBalance(account, chainId),
+
+											walletService.fetchTransactions(account, chainId),
+										]);
+
+										if (balanceData && typeof balanceData === "string") {
+											setBalance(balanceData);
+										}
+
+										if (transactionsData && Array.isArray(transactionsData)) {
+											setTransactions(transactionsData);
+										}
+									} catch (err) {
+										console.error("Error refreshing data:", err);
+									} finally {
+										setIsLoadingTx(false);
+									}
 								}}
 							>
 								Refresh Balance
 							</Button>
 						</CardContent>
-						<CardFooter className="grid grid-cols-3 gap-4">
+						<CardFooter className="grid grid-cols-2 gap-4">
 							<Button variant="outline">
 								<CoinsIcon className="h-4 w-4" />
 								<span>Transactions</span>
 							</Button>
-							<Button variant="outline">
+							{/* <Button variant="outline">
 								<SendIcon className="h-4 w-4" />
 								<span>Send</span>
 							</Button>
 							<Button variant="outline">
 								<CreditCardIcon className="h-4 w-4" />
 								<span>Cards</span>
-							</Button>
+							</Button> */}
+							<Popover
+								open={open}
+								onOpenChange={setOpen}
+							>
+								<PopoverTrigger asChild>
+									<Button
+										variant="outline"
+										role="combobox"
+										aria-expanded={open}
+										className=" justify-between"
+									>
+										{dropDownValue
+											? chains.find((chains) => chains.value === dropDownValue)
+													?.label
+											: "Select chain..."}
+										<ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+									</Button>
+								</PopoverTrigger>
+								<PopoverContent className=" p-0">
+									<Command>
+										<CommandList>
+											<CommandGroup>
+												{chains.map((chains: any) => (
+													<CommandItem
+														key={chains.value}
+														value={chains.value}
+														onSelect={(currentValue) => {
+															setDropDownValue(
+																currentValue === dropDownValue
+																	? ""
+																	: currentValue
+															);
+															setChainId(currentValue);
+															setOpen(false);
+														}}
+													>
+														<CheckIcon
+															className={cn(
+																"mr-2 h-4 w-4",
+																dropDownValue === chains.value
+																	? "opacity-100"
+																	: "opacity-0"
+															)}
+														/>
+														{chains.label}
+													</CommandItem>
+												))}
+											</CommandGroup>
+										</CommandList>
+									</Command>
+								</PopoverContent>
+							</Popover>
 						</CardFooter>
 					</Card>
 
