@@ -65,6 +65,23 @@ class ContractService {
 			return error;
 		}
 	}
+
+	async getTokenInfo(address: string) {
+		const apiUrl = `http://localhost:3000/token/address/${address}`;
+		try {
+			const response = await fetch(apiUrl);
+
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+
+			const data = await response.json();
+			return data;
+		} catch (error) {
+			console.error("Error fetching token info:", error);
+			throw error;
+		}
+	}
 }
 
 const contractService = new ContractService();
