@@ -69,7 +69,7 @@ export default function Component() {
 	const chains = [
 		{
 			value: "1",
-			label: "Ethereum Mainnet Transactions",
+			label: "Sepolia Testnet Transactions",
 		},
 		{
 			value: "11155111",
