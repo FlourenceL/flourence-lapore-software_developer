@@ -62,6 +62,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import contractService from "@/service/contract.service";
 import { MintResult } from "@/interface/mint";
+import { TokenInfo } from "@/interface/tokenInfo";
 
 export default function Component() {
 	const router = useRouter();
@@ -88,6 +89,7 @@ export default function Component() {
 	const [status, setStatus] = useState({ type: "", message: "" });
 	const [mintAmount, setMintAmount] = useState("");
 	const [mintLoading, setMintLoading] = useState(false);
+	const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
 
 	useEffect(() => {
 		initializeWallet();
@@ -247,18 +249,19 @@ export default function Component() {
 			)) as MintResult;
 
 			if (result.success) {
+				console.log('Minting success')
+				const data = await contractService.getTokenInfo(storedAddress);
+				console.log(data)
+				setTokenInfo(data);
 				setStatus({
 					type: "success",
 					message: `Successfully minted ${
 						result.amount
 					} tokens! TX: ${result.txHash.substring(0, 10)}...`,
-				});
-
-				// Update balance
-				// const newBalance = await contractService.getBalance(walletAddress);
-				// setBalance(newBalance);
-				// setMintAmount('');
+				});	
 			}
+
+			
 		} catch (error) {
 			setStatus({
 				type: "error",
@@ -515,7 +518,7 @@ export default function Component() {
 														}
 													>
 														{isSent ? "-" : "+"}
-														{parseFloat(tx.value).toFixed(4)} ETH
+														{parseFloat(tx.value).toFixed(10)} ETH
 													</TableCell>
 													<TableCell>
 														<span
@@ -536,6 +539,44 @@ export default function Component() {
 							)}
 						</CardContent>
 					</Card>
+
+					{!tokenInfo ? (
+						<Card className="p-6">
+							<p>Token information is displayed here if minting process is success!</p>
+						</Card>
+					) : (
+						<Card className="p-6">
+							<h2 className="text-2xl font-bold mb-4">
+								{tokenInfo.tokenName} ({tokenInfo.symbol})
+							</h2>
+
+							<div className="space-y-3">
+								<div>
+									<p className="text-sm text-gray-600">Address</p>
+									<p className="font-mono text-sm">{tokenInfo.address}</p>
+								</div>
+
+								<div>
+									<p className="text-sm text-gray-600">Balance</p>
+									<p className="text-xl font-bold">
+										{tokenInfo.balance} {tokenInfo.symbol}
+									</p>
+								</div>
+
+								<div>
+									<p className="text-sm text-gray-600">Total Supply</p>
+									<p className="text-lg">
+										{tokenInfo.totalSupply} {tokenInfo.symbol}
+									</p>
+								</div>
+
+								<div>
+									<p className="text-sm text-gray-600">Decimals</p>
+									<p>{tokenInfo.decimals}</p>
+								</div>
+							</div>
+						</Card>
+					)}
 				</div>
 			</main>
 		</div>
